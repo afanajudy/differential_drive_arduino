@@ -1,0 +1,379 @@
+#include <DueTimer.h>
+#include <Encoder.h>
+#include "Shield2AMotor.h"
+
+// Connect 4 pin on SHIELD-2AMOTOR to "Signed Magnitude" mode
+Shield2AMotor motor(SIGNED_MAGNITUDE);
+Encoder rightEncoder(3,12);
+Encoder leftEncoder(11,2);
+int irLeft = A10;
+int irRight = A11;
+int irFront = A8;
+
+ int motorSpeed;
+double wheelDiam = 2.36;
+int maxPower = 50;
+
+
+
+
+//variables for robot kinematics
+
+double circumfrence = PI*wheelDiam;
+double ticksRotation = 28; //ticks per inch is 28 for encoder
+double gearRatio = 210; //gear ratio of motor is 210
+double wheelSpace = 3.625;//distance b/w two wheels in inches
+double ticksRev = (ticksRotation*gearRatio)*0.936; //ticks per revolution of wheel (0.936) error factor 
+
+double ticksInch = ticksRev/circumfrence; //denomitor to find ticks per inch
+
+
+volatile double right = 0;
+volatile double left = 0;
+volatile double TotinTravelledRight = 0;
+volatile double TotinTravelledLeft = 0;
+volatile double inTravelledRight = 0;
+volatile double inTravelledLeft = 0;
+volatile double timeConstant = .05; //50 ms interrupt change in time
+volatile double rightTotal = 0;
+volatile double leftTotal =0;
+volatile double rightWheelVelocity = 0;
+volatile double leftWheelVelocity = 0;
+volatile double totalRobotVelocity = 0;
+volatile double totalAngularVelocity;
+
+volatile double linearDistance;
+volatile double angleChange;
+
+volatile double rightWheelSpeed;
+volatile double leftWheelSpeed;
+volatile double turnRate;
+//volatile double phi = 0; //orientation of robot from 0 to 2pi or pi.. i forget
+
+
+//volatile double waypointX[]= {16.5,16.5,24,24,0,0,8.33,8.33,13};
+//volatile double waypointY[]= {0,8.33,8.33,32.33,40.66,40.66,49,49};
+
+volatile double waypointX[]= {10,10,0,0};
+volatile double waypointY[]= {0,10,10,0};
+
+volatile double Xc;
+volatile double Yc;
+volatile double Beta;
+
+int turnKP = 150;
+int turnKI = 5;
+
+// i need to go through the way points (0,0)(
+volatile double robotStartPos[3] = {0,0,0};
+volatile double x = robotStartPos[0];
+volatile double y = robotStartPos[1];
+volatile double theta = robotStartPos[2];
+
+volatile double robotCurrentPos[3];
+volatile double xprime = robotCurrentPos[0];
+volatile double yprime = robotCurrentPos[1];
+//volatile double thetaprime = robotCurrentPos[2];
+volatile double xprevious = 0;
+volatile double yprevious = 0;
+volatile double thetaprevious = 0;
+volatile int i = 0;
+volatile double angleChangeSum;
+//ticks/ticks rotation -> inches travelled
+//encodereleft/ticksrotation = distance travelled by left wheel
+//encoderright/ticksrotation = distance travelled by right wheel 
+//need to find velocity of wheel 
+
+
+
+//variable for IR Sensor PID
+volatile double irArray[3];
+volatile double distanceL = irArray[0];
+volatile double distanceR = irArray[1];
+volatile double distanceF = irArray[2];
+
+
+void setup() {
+  // put your setup code here, to run once:
+  
+  Serial.begin(9600);
+  Timer1.attachInterrupt(timerInt).start(50000);
+ // motor.control(0,0);
+  //Timer1.attachInterrupt(irCheck).start(50000);
+Serial.println("Begin");
+//  motor.control(motorSpeed,motorSpeed);
+
+delay(1000);
+  
+}
+
+
+
+
+
+
+
+void loop() {
+//  // put your main code here, to run repeatedly:
+//delay(1000);
+// robotCurrentPos [0] = xprime;
+// robotCurrentPos[1]=yprime;
+// robotCurrentPos[2]=theta;
+//Serial.print("xprime value");
+// Serial.println(robotCurrentPos[0]);
+//  Serial.print("yprime value");
+// Serial.println(robotCurrentPos[1]);
+//  Serial.print("phi value");
+// Serial.println(robotCurrentPos[2]);
+// 
+      
+
+       //Xc = waypoint[i][0];
+      //  Yc = waypoint[i][1];
+      //  Beta = waypoint[i][2];
+
+     
+        
+       
+            
+
+
+  // 
+  Serial.println("right value");
+  Serial.println(right);
+  Serial.println("left value");
+  Serial.println(left);
+//  Serial.println(" inch tralled right ");
+//  Serial.println(inTravelledRight);
+//  Serial.println("inch travlled left ");
+//  Serial.println(inTravelledLeft);
+//  Serial.println("left wheel velocity");
+//  Serial.println(leftWheelVelocity);
+//  Serial.println("right wheel velocity:");
+//  Serial.println(rightWheelVelocity);
+ //Serial.print("total inches travelled right:");
+ //Serial.println(TotinTravelledRight);
+  //Serial.print("total inches travelled left:");
+ //Serial.println(TotinTravelledLeft);
+//  Serial.println("total robot velocity");
+//  Serial.println(totalRobotVelocity);
+//  Serial.println("robots x pose");
+//  Serial.println(robotCurrentPos[0]);
+//  Serial.print("theta vallue:");
+//  Serial.println(theta);
+         delay(1000);
+          Serial.println("i val ");
+          Serial.println(i);
+          Serial.print("Motor start");
+        Serial.println(motorSpeed);
+        //Serial.println(next[0]);
+        Serial.print("linear dist");
+        Serial.println(linearDistance);
+        Serial.print("angle change");
+        Serial.println(angleChange);
+//        Serial.print("x prev ");
+//        Serial.println(xprevious);
+//        Serial.print("y prev ");
+//        Serial.println(yprevious);
+  
+  //Serial.print("turnRate : ");
+  //Serial.println(turnRate);
+  //Serial.print("leftWheelSpeed : ");
+  //Serial.println(leftWheelSpeed);
+  //Serial.print("rightWheelSpeed :");
+  //Serial.println(rightWheelSpeed); 
+  Serial.print("x pose : ");
+  Serial.println(xprime);
+  Serial.print("y pose : ");
+  Serial.println(yprime);
+//  Serial.print("theta orientation : ");
+//  Serial.println(theta);
+  
+  
+}
+
+
+
+
+void timerInt(){
+ 
+  encoderTicks();
+
+
+//    xprevious = xprime;
+//    yprevious = yprime;
+//    thetaprevious = theta;
+    
+    linearDistance = sqrt(sq(waypointX[i]-xprime)+sq(waypointY[i]-yprime));
+    angleChange = (atan2((waypointY[i]-yprime),(waypointX[i]-xprime))-theta);
+    
+    
+    if (angleChange > PI) {
+      angleChange = angleChange - 2*PI;
+    } 
+    if (angleChange < -PI) {
+      angleChange = angleChange + 2*PI;
+    }
+    angleChangeSum += (angleChange);   
+    
+    turnRate = (angleChange) * turnKP + angleChangeSum * turnKI;
+    
+    if  (abs(angleChange) < 0.05){
+        motorSpeed = -50;
+    }
+    
+    else //we want the robot to start stopping a little further from the target 
+        {
+            motorSpeed = 0 ;                          
+    }
+
+    leftWheelSpeed = motorSpeed + turnRate;
+    rightWheelSpeed = motorSpeed - turnRate; 
+    if(linearDistance < 0.1) //if the magnitude of the distance between the goal and your position is less than 0.1 inches
+{
+  
+   i ++;  //increment the waypoint so goal becomes next waypoint
+}
+
+ motor.control(rightWheelSpeed, leftWheelSpeed);
+
+ //if (i = 2){motor.control(0, 0);}
+
+}
+// for (int k=0;k<2;) {           
+      
+//      else {
+//      //rightWheelSpeed = turnRate;
+//      //leftWheelSpeed = -turnRate;
+//      motor.control(rightWheelSpeed,leftWheelSpeed);
+//      theta = angleChange*timeConstant;
+//      }
+//      if (theta <= angleChange+.2 && theta >= angleChange-.2)
+//      {
+//        k = k+ 1;
+//        
+//      }
+//  }
+//   }
+
+
+//
+
+  
+
+
+void irCheck() {
+
+  readDistance();
+
+int avgThresholdValue = 8;
+
+if (distanceL < avgThresholdValue && distanceR < avgThresholdValue && distanceF < avgThresholdValue) {
+  // this means there are 3 walls in front of the robot 
+  //the robot should move backward 
+  
+  }
+else if (distanceL > avgThresholdValue && distanceR > avgThresholdValue && distanceF > avgThresholdValue )  
+  {//this means there all no walls 
+   //the robot should move forward probably 
+  }
+else if (distanceL < avgThresholdValue && distanceR < avgThresholdValue && distanceF > avgThresholdValue)
+{}//this is good, where we ant our robot to be most of the time
+//move the robot forward with a pid like this 
+else{}   
+    
+  
+
+}
+
+//reads ir sensor vaue and converts to inches 
+void readDistance(){
+  distanceL = -0.0339*(analogRead(irLeft)) + 24.801;
+  distanceR = -0.0339*(analogRead(irRight)) + 24.801;
+  distanceF = -0.0339*(analogRead(irFront)) + 24.801;
+}
+
+void findWaypoints(){
+
+
+}
+
+void encoderTicks()//this timer interrupt function works fine to find current x y theta position
+{
+
+ // motor.control(50,50); // 50 is maximum robot power that robot can move and encoders can work
+
+ //this function reads the encoder values and occurs every 50ms
+ //it uses the encoder values to caluculate the distance the robot has travelled
+right = rightEncoder.read(); //new encoder values
+left = leftEncoder.read(); //new encoder values
+
+rightTotal = rightTotal + right;
+leftTotal = leftTotal + left;
+
+//need encoder values at each increment as well as in total thus
+//right value = new value
+//right total value = last value + new value
+//reset encoder values 
+
+TotinTravelledRight = rightTotal/ticksInch; //total inches the right wheel travelled
+TotinTravelledLeft = leftTotal/ticksInch; //total inches the left wheel travelled 
+
+
+//leftwheelspeed = fwdspeed- turnrate;
+//rightwheelspeed = fwdspeed + turnrate;
+
+inTravelledRight = right/ticksInch; //inches travelled this time frame
+inTravelledLeft = left/ticksInch; //inches travelled this time frame
+
+//we want to know how far the robot travelled in general 
+//requires robot pose kinematics 
+
+//must calculate velocity of wheels
+rightWheelVelocity = inTravelledRight / timeConstant;
+leftWheelVelocity = inTravelledLeft / timeConstant; //velocity based on time frame
+//the total linear velocity of the robot will be the average of the two wheel velocities
+totalRobotVelocity = (rightWheelVelocity + leftWheelVelocity)/2;
+//the angular velocity of the robot will be the difference in  velocities over the distance between the two wheels (vr-vl)/l
+totalAngularVelocity = (rightWheelVelocity - leftWheelVelocity)/wheelSpace;
+
+theta += totalAngularVelocity*timeConstant; //1.57 rad = 90degrees
+
+//
+////now we want to find the robots position 
+////we will start by assuming the robots position is (x,y,z,)=(0,0,0)
+//
+//if (rightWheelVelocity >= 0 && leftWheelVelocity >= 0){
+x = totalRobotVelocity*timeConstant*cos(theta); //this is the robots initial x position
+y = totalRobotVelocity*timeConstant*sin(theta);
+
+
+////this is the robots current position that will keep updating
+xprime = xprime + x;
+yprime = yprime + y;
+
+////getting toooo high of values, why? 
+//
+
+
+//calculate where we need to face
+//find the difference between current and goal position
+//if theres a difference turn
+//find waypoints
+rightEncoder.write(0);
+leftEncoder.write(0);//reset encoder values for this time interval
+ 
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+    
