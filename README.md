@@ -1,2 +1,2 @@
 # differential_drive_arduino
-We built a maze solving robot using differential drive kinematics 
+Built a two-story maze solving robot using differential drive kinematics 
